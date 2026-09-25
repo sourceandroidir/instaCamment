@@ -98,8 +98,9 @@ class InstagramRepository(
             var pageIteration = 0
 
             var lastMetadata = com.example.data.remote.PostMetadata()
+            var lastMediaId = shortcode
 
-            while (hasMore && pageIteration < 15) { // Safety iteration limit
+            while (hasMore && pageIteration < 200) { // Support fetching up to 10,000+ comments
                 pageIteration++
                 try {
                     val result = parser.fetchCommentsFromWebPage(
@@ -110,6 +111,9 @@ class InstagramRepository(
                     )
 
                     lastMetadata = result.postMetadata
+                    if (result.mediaId.isNotBlank()) {
+                        lastMediaId = result.mediaId
+                    }
                     duplicateCount += result.duplicateCount
                     val rawUsers = result.users
                     totalFetched += rawUsers.size + result.duplicateCount
@@ -122,8 +126,21 @@ class InstagramRepository(
                         val existingUser = db.userDao().getUserByUsername(cleanUsername)
                         if (existingUser != null) {
                             duplicateCount++
-                            // Update last seen timestamp
-                            db.userDao().updateUser(existingUser.copy(lastSeenAt = System.currentTimeMillis()))
+                            // Update last seen + fill userId & profilePic if they were empty before
+                            val updatedId = if (existingUser.instagramUserId.isBlank() && rawUser.userId.isNotBlank()) {
+                                rawUser.userId
+                            } else existingUser.instagramUserId
+                            val updatedPic = if (existingUser.profilePicUrl.isBlank() && rawUser.profilePicUrl.isNotBlank()) {
+                                rawUser.profilePicUrl
+                            } else existingUser.profilePicUrl
+
+                            db.userDao().updateUser(
+                                existingUser.copy(
+                                    lastSeenAt = System.currentTimeMillis(),
+                                    instagramUserId = updatedId,
+                                    profilePicUrl = updatedPic
+                                )
+                            )
                         } else {
                             val isBlacklisted = blacklistedUsernames.contains(cleanUsername)
                             val newUser = InstagramUser(
@@ -131,6 +148,7 @@ class InstagramRepository(
                                 instagramUserId = rawUser.userId,
                                 displayName = rawUser.displayName.ifEmpty { cleanUsername },
                                 profileUrl = rawUser.profileUrl,
+                                profilePicUrl = rawUser.profilePicUrl,
                                 sourcePostId = post.id,
                                 messageStatus = if (isBlacklisted) "SKIPPED" else "NONE"
                             )
@@ -147,12 +165,15 @@ class InstagramRepository(
 
                     hasMore = result.hasNextPage
                     cursor = result.endCursor
-                    if (cursor.isNullOrBlank()) {
+                    if (cursor.isNullOrBlank() || rawUsers.isEmpty()) {
                         hasMore = false
                     }
                 } catch (e: Exception) {
                     errorCount++
                     onProgress(totalFetched, uniqueCount, duplicateCount, errorCount)
+                    if (totalFetched == 0) {
+                        throw e
+                    }
                     break
                 }
             }
@@ -160,6 +181,7 @@ class InstagramRepository(
             val currentPostCount = db.userDao().getUserCountByPost(post.id)
             val finalComments = if (lastMetadata.commentCount > 0) lastMetadata.commentCount else totalFetched
             val updatedPost = post.copy(
+                instagramMediaId = lastMediaId,
                 caption = lastMetadata.caption.ifEmpty { post.caption },
                 thumbnailUrl = lastMetadata.thumbnailUrl.ifEmpty { post.thumbnailUrl },
                 videoUrl = lastMetadata.videoUrl.ifEmpty { post.videoUrl },
@@ -393,7 +415,7 @@ class InstagramRepository(
         file
     }
 
-    // 8. REAL DIRECT MESSAGE SENDING TO INSTAGRAM
+    // 8. REAL DIRECT MESSAGE SENDING TO INSTAGRAM (FIXED)
     suspend fun sendDirectMessage(
         targetUsername: String,
         messageText: String,
@@ -403,6 +425,9 @@ class InstagramRepository(
             val cleanTarget = targetUsername.removePrefix("@").trim()
             if (cleanTarget.isEmpty()) {
                 return@withContext Result.failure(IllegalArgumentException("نام کاربری مقصد مشخص نشده است."))
+            }
+            if (messageText.isBlank()) {
+                return@withContext Result.failure(IllegalArgumentException("متن پیام خالی است."))
             }
 
             val rawCookies: String
@@ -426,73 +451,105 @@ class InstagramRepository(
             }
 
             val effectiveCsrf = if (csrfToken.isNotBlank()) csrfToken else extractCookieValue(rawCookies, "csrftoken")
-
-            val client = OkHttpClient.Builder()
-                .connectTimeout(25, TimeUnit.SECONDS)
-                .readTimeout(25, TimeUnit.SECONDS)
-                .followRedirects(true)
-                .build()
-
-            // Resolve target user PK
-            var targetUserId = ""
-            val profileUrl = "https://www.instagram.com/api/v1/users/web_profile_info/?username=$cleanTarget"
-            val profileReq = Request.Builder()
-                .url(profileUrl)
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
-                .header("Accept", "*/*")
-                .header("X-IG-App-ID", "936619743392459")
-                .header("X-CSRFToken", effectiveCsrf)
-                .header("Cookie", rawCookies)
-                .header("Referer", "https://www.instagram.com/$cleanTarget/")
-                .build()
-
-            try {
-                val profileResp = client.newCall(profileReq).execute()
-                if (profileResp.isSuccessful) {
-                    val bodyStr = profileResp.body?.string() ?: ""
-                    val json = JSONObject(bodyStr)
-                    val userObj = json.optJSONObject("data")?.optJSONObject("user")
-                    targetUserId = userObj?.optString("id", "") ?: ""
-                }
-            } catch (_: Exception) {}
-
-            if (targetUserId.isEmpty()) {
-                val searchUrl = "https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=$cleanTarget&rank_token=0.1"
-                val searchReq = Request.Builder()
-                    .url(searchUrl)
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
-                    .header("X-IG-App-ID", "936619743392459")
-                    .header("X-CSRFToken", effectiveCsrf)
-                    .header("Cookie", rawCookies)
-                    .build()
-
-                try {
-                    val searchResp = client.newCall(searchReq).execute()
-                    if (searchResp.isSuccessful) {
-                        val sBody = searchResp.body?.string() ?: ""
-                        val sJson = JSONObject(sBody)
-                        val usersArr = sJson.optJSONArray("users")
-                        if (usersArr != null) {
-                            for (i in 0 until usersArr.length()) {
-                                val u = usersArr.getJSONObject(i).optJSONObject("user")
-                                if (u != null && u.optString("username").equals(cleanTarget, ignoreCase = true)) {
-                                    targetUserId = u.optString("pk", u.optString("id"))
-                                    break
-                                }
-                            }
-                        }
-                    }
-                } catch (_: Exception) {}
-            }
-
-            if (targetUserId.isEmpty()) {
+            if (effectiveCsrf.isBlank()) {
                 return@withContext Result.failure(
-                    IllegalArgumentException("کاربر @$cleanTarget در اینستاگرام یافت نشد یا صفحه خصوصی/غیرفعال است.")
+                    IllegalStateException("csrftoken یافت نشد. لطفاً دوباره وارد حساب اینستاگرام شوید.")
                 )
             }
 
+            val client = OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .build()
+
+            // ---------- Resolve target user PK (numeric ID) ----------
+            var targetUserId = ""
+
+            // First try from local DB if we already have it
+            val localUser = db.userDao().getUserByUsername(cleanTarget.lowercase())
+            if (localUser != null && localUser.instagramUserId.isNotBlank()) {
+                targetUserId = localUser.instagramUserId
+            }
+
+            if (targetUserId.isBlank()) {
+                val profileUrl = "https://www.instagram.com/api/v1/users/web_profile_info/?username=$cleanTarget"
+                val profileReq = Request.Builder()
+                    .url(profileUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                    .header("Accept", "*/*")
+                    .header("X-IG-App-ID", "936619743392459")
+                    .header("X-CSRFToken", effectiveCsrf)
+                    .header("X-Requested-With", "XMLHttpRequest")
+                    .header("Cookie", rawCookies)
+                    .header("Referer", "https://www.instagram.com/$cleanTarget/")
+                    .header("Origin", "https://www.instagram.com")
+                    .build()
+
+                try {
+                    val profileResp = client.newCall(profileReq).execute()
+                    val bodyStr = profileResp.body?.string() ?: ""
+                    if (profileResp.isSuccessful && bodyStr.isNotBlank()) {
+                        val json = JSONObject(bodyStr)
+                        val data = json.optJSONObject("data")
+                        val user = data?.optJSONObject("user")
+                        targetUserId = user?.optString("id")?.ifBlank { null }
+                            ?: user?.optString("pk")?.ifBlank { null }
+                            ?: ""
+                    }
+                } catch (_: Exception) {
+                    // continue to next method
+                }
+            }
+
+            // Fallback: public profile page scrape
+            if (targetUserId.isBlank()) {
+                try {
+                    val pageReq = Request.Builder()
+                        .url("https://www.instagram.com/$cleanTarget/")
+                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                        .header("Accept", "text/html")
+                        .header("Cookie", rawCookies)
+                        .header("X-CSRFToken", effectiveCsrf)
+                        .build()
+                    val pageResp = client.newCall(pageReq).execute()
+                    val html = pageResp.body?.string() ?: ""
+                    // Look for "profilePage_123456789" or "\"id\":\"123456789\"" near username
+                    val idPattern = java.util.regex.Pattern.compile(
+                        "\"id\"\\s*:\\s*\"(\\d{5,})\"[^}]{0,80}\"username\"\\s*:\\s*\"${Regex.escape(cleanTarget)}\"|\"username\"\\s*:\\s*\"${Regex.escape(cleanTarget)}\"[^}]{0,80}\"id\"\\s*:\\s*\"(\\d{5,})\""
+                    )
+                    val m = idPattern.matcher(html)
+                    if (m.find()) {
+                        targetUserId = (m.group(1) ?: m.group(2) ?: "").trim()
+                    }
+                    if (targetUserId.isBlank()) {
+                        val pkPattern = java.util.regex.Pattern.compile("\"pk\"\\s*:\\s*\"?(\\d{5,})\"?")
+                        val pkM = pkPattern.matcher(html)
+                        if (pkM.find()) {
+                            targetUserId = pkM.group(1) ?: ""
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+
+            if (targetUserId.isBlank()) {
+                return@withContext Result.failure(
+                    IllegalStateException("نتوانستیم شناسه عددی (pk) کاربر @$cleanTarget را پیدا کنیم. کوکی را تازه کنید یا یوزرنیم را بررسی کنید.")
+                )
+            }
+
+            // Update local DB with the resolved ID if we have the user
+            if (localUser != null && localUser.instagramUserId.isBlank()) {
+                try {
+                    db.userDao().updateUser(localUser.copy(instagramUserId = targetUserId))
+                } catch (_: Exception) {
+                }
+            }
+
+            // ---------- Send the actual DM ----------
+            val clientContext = java.util.UUID.randomUUID().toString().replace("-", "")
             val sendUrl = "https://www.instagram.com/api/v1/direct_v2/threads/broadcast/text/"
-            val clientContext = UUID.randomUUID().toString()
 
             val formBody = FormBody.Builder()
                 .add("recipient_users", "[[\"$targetUserId\"]]")
@@ -506,12 +563,13 @@ class InstagramRepository(
                 .post(formBody)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
                 .header("Accept", "*/*")
+                .header("Content-Type", "application/x-www-form-urlencoded")
                 .header("X-CSRFToken", effectiveCsrf)
                 .header("X-IG-App-ID", "936619743392459")
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("Cookie", rawCookies)
                 .header("Origin", "https://www.instagram.com")
-                .header("Referer", "https://www.instagram.com/direct/t/")
+                .header("Referer", "https://www.instagram.com/direct/inbox/")
                 .build()
 
             val sendResp = client.newCall(sendReq).execute()
@@ -541,6 +599,17 @@ class InstagramRepository(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun deletePost(post: InstagramPost) = withContext(Dispatchers.IO) {
+        db.postDao().deletePost(post)
+    }
+
+    suspend fun deleteAllPosts() = withContext(Dispatchers.IO) {
+        val posts = db.postDao().getAllPosts().first()
+        for (p in posts) {
+            db.postDao().deletePost(p)
         }
     }
 

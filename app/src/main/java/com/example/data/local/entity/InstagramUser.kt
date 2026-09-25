@@ -14,6 +14,7 @@ data class InstagramUser(
     val instagramUserId: String = "",
     val displayName: String = "",
     val profileUrl: String = "",
+    val profilePicUrl: String = "",
     val sourcePostId: Long = 0,
     val firstSeenAt: Long = System.currentTimeMillis(),
     val lastSeenAt: Long = System.currentTimeMillis(),

@@ -21,7 +21,13 @@ class PostsViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deletePost(post: InstagramPost) {
         viewModelScope.launch {
-            repository.allPosts // We can call DAO delete if needed
+            repository.deletePost(post)
+        }
+    }
+
+    fun deleteAllPosts() {
+        viewModelScope.launch {
+            repository.deleteAllPosts()
         }
     }
 }

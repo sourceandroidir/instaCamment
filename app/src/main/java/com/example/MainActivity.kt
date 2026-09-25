@@ -129,6 +129,11 @@ class MainActivity : ComponentActivity() {
                                         onNavigateToCampaign = { postId ->
                                             activeCampaignPostId = postId
                                             currentScreen = Screen.Campaigns
+                                        },
+                                        onReExtract = { postUrl ->
+                                            extractCommentsViewModel.onUrlChanged(postUrl)
+                                            currentScreen = Screen.Extract
+                                            extractCommentsViewModel.startExtraction()
                                         }
                                     )
                                     Screen.Users -> UsersScreen(

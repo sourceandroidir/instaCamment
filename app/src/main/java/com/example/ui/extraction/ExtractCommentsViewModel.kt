@@ -18,7 +18,8 @@ data class ExtractCommentsUiState(
     val hasActiveSession: Boolean = false,
     val sessionUsername: String = "",
     val statusMessage: String = "برای شروع، لینک پست اینستاگرام را وارد کنید.",
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val extractedPost: com.example.data.local.entity.InstagramPost? = null
 )
 
 class ExtractCommentsViewModel(application: Application) : AndroidViewModel(application) {
@@ -94,6 +95,7 @@ class ExtractCommentsViewModel(application: Application) : AndroidViewModel(appl
                     _uiState.update {
                         it.copy(
                             isExtracting = false,
+                            extractedPost = post,
                             statusMessage = "استخراج با موفقیت پایان یافت. ${post.uniqueUsers} آیدی یکتا ذخیره شد (${it.duplicateCount} تکراری تفکیک شد)."
                         )
                     }
