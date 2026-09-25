@@ -1,0 +1,6 @@
+{
+  "name": "مدیریت اینستاگرام",
+  "description": "سیستم جامع مدیریت کامنت‌ها، استخراج کاربران و مدیریت کمپین‌های پیام‌رسانی اینستاگرام",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
