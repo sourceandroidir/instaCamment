@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.StatCard
 import com.example.ui.navigation.Screen
@@ -156,22 +157,24 @@ fun DashboardScreen(
                 onClick = { onNavigate(Screen.Extract) },
                 modifier = Modifier
                     .weight(1f)
-                    .testTag("dashboard_extract_btn")
+                    .testTag("dashboard_extract_btn"),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Icon(Icons.Default.Download, contentDescription = null)
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("استخراج جدید")
+                Text("استخراج جدید", fontSize = 12.sp, maxLines = 1, softWrap = false)
             }
 
             OutlinedButton(
                 onClick = { onNavigate(Screen.Campaigns) },
                 modifier = Modifier
                     .weight(1f)
-                    .testTag("dashboard_campaign_btn")
+                    .testTag("dashboard_campaign_btn"),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Icon(Icons.Default.Campaign, contentDescription = null)
+                Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("ساخت کمپین")
+                Text("ساخت کمپین", fontSize = 12.sp, maxLines = 1, softWrap = false)
             }
         }
     }

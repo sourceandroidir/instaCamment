@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.StatusChip
 
@@ -78,11 +79,12 @@ fun QueueScreen(viewModel: QueueViewModel) {
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedButton(
                     onClick = { viewModel.retryFailed() },
-                    modifier = Modifier.fillMaxWidth().testTag("retry_failed_btn")
+                    modifier = Modifier.fillMaxWidth().testTag("retry_failed_btn"),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("تلاش مجدد برای ناموفق‌ها")
+                    Text("تلاش مجدد خطادارها", fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
             }
         }

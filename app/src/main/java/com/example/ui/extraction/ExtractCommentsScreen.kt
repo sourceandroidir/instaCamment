@@ -129,11 +129,12 @@ fun ExtractCommentsScreen(viewModel: ExtractCommentsViewModel) {
                         enabled = !state.isExtracting,
                         modifier = Modifier
                             .weight(1f)
-                            .testTag("start_extract_button")
+                            .testTag("start_extract_button"),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("شروع استخراج و پارس")
+                        Text("شروع استخراج", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
 
                     OutlinedButton(
@@ -144,11 +145,12 @@ fun ExtractCommentsScreen(viewModel: ExtractCommentsViewModel) {
                         ),
                         modifier = Modifier
                             .weight(1f)
-                            .testTag("stop_extract_button")
+                            .testTag("stop_extract_button"),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
                     ) {
-                        Icon(Icons.Default.Stop, contentDescription = null)
+                        Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("توقف")
+                        Text("توقف", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }

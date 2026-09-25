@@ -10,9 +10,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 class InstagramRepository(
     private val context: Context,
@@ -386,5 +391,164 @@ class InstagramRepository(
             }
         }
         file
+    }
+
+    // 8. REAL DIRECT MESSAGE SENDING TO INSTAGRAM
+    suspend fun sendDirectMessage(
+        targetUsername: String,
+        messageText: String,
+        account: InstagramAccount? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val cleanTarget = targetUsername.removePrefix("@").trim()
+            if (cleanTarget.isEmpty()) {
+                return@withContext Result.failure(IllegalArgumentException("نام کاربری مقصد مشخص نشده است."))
+            }
+
+            val rawCookies: String
+            val csrfToken: String
+            val senderUser: String
+
+            if (account != null && account.cookiesEncrypted.isNotEmpty()) {
+                rawCookies = keystoreManager.decrypt(account.cookiesEncrypted)
+                csrfToken = account.csrfToken
+                senderUser = account.username
+            } else {
+                rawCookies = settingsDataStore.instagramCookies.first()
+                csrfToken = settingsDataStore.instagramCsrfToken.first()
+                senderUser = settingsDataStore.instagramSessionUser.first().ifEmpty { "حساب متصل" }
+            }
+
+            if (rawCookies.isBlank()) {
+                return@withContext Result.failure(
+                    IllegalStateException("هیچ نشست فعالی با کوکی اینستاگرام یافت نشد. لطفاً ابتدا از بخش «حساب‌ها» وارد حساب خود شوید.")
+                )
+            }
+
+            val effectiveCsrf = if (csrfToken.isNotBlank()) csrfToken else extractCookieValue(rawCookies, "csrftoken")
+
+            val client = OkHttpClient.Builder()
+                .connectTimeout(25, TimeUnit.SECONDS)
+                .readTimeout(25, TimeUnit.SECONDS)
+                .followRedirects(true)
+                .build()
+
+            // Resolve target user PK
+            var targetUserId = ""
+            val profileUrl = "https://www.instagram.com/api/v1/users/web_profile_info/?username=$cleanTarget"
+            val profileReq = Request.Builder()
+                .url(profileUrl)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "*/*")
+                .header("X-IG-App-ID", "936619743392459")
+                .header("X-CSRFToken", effectiveCsrf)
+                .header("Cookie", rawCookies)
+                .header("Referer", "https://www.instagram.com/$cleanTarget/")
+                .build()
+
+            try {
+                val profileResp = client.newCall(profileReq).execute()
+                if (profileResp.isSuccessful) {
+                    val bodyStr = profileResp.body?.string() ?: ""
+                    val json = JSONObject(bodyStr)
+                    val userObj = json.optJSONObject("data")?.optJSONObject("user")
+                    targetUserId = userObj?.optString("id", "") ?: ""
+                }
+            } catch (_: Exception) {}
+
+            if (targetUserId.isEmpty()) {
+                val searchUrl = "https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query=$cleanTarget&rank_token=0.1"
+                val searchReq = Request.Builder()
+                    .url(searchUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                    .header("X-IG-App-ID", "936619743392459")
+                    .header("X-CSRFToken", effectiveCsrf)
+                    .header("Cookie", rawCookies)
+                    .build()
+
+                try {
+                    val searchResp = client.newCall(searchReq).execute()
+                    if (searchResp.isSuccessful) {
+                        val sBody = searchResp.body?.string() ?: ""
+                        val sJson = JSONObject(sBody)
+                        val usersArr = sJson.optJSONArray("users")
+                        if (usersArr != null) {
+                            for (i in 0 until usersArr.length()) {
+                                val u = usersArr.getJSONObject(i).optJSONObject("user")
+                                if (u != null && u.optString("username").equals(cleanTarget, ignoreCase = true)) {
+                                    targetUserId = u.optString("pk", u.optString("id"))
+                                    break
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+
+            if (targetUserId.isEmpty()) {
+                return@withContext Result.failure(
+                    IllegalArgumentException("کاربر @$cleanTarget در اینستاگرام یافت نشد یا صفحه خصوصی/غیرفعال است.")
+                )
+            }
+
+            val sendUrl = "https://www.instagram.com/api/v1/direct_v2/threads/broadcast/text/"
+            val clientContext = UUID.randomUUID().toString()
+
+            val formBody = FormBody.Builder()
+                .add("recipient_users", "[[\"$targetUserId\"]]")
+                .add("text", messageText)
+                .add("client_context", clientContext)
+                .add("action", "send_item")
+                .build()
+
+            val sendReq = Request.Builder()
+                .url(sendUrl)
+                .post(formBody)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "*/*")
+                .header("X-CSRFToken", effectiveCsrf)
+                .header("X-IG-App-ID", "936619743392459")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Cookie", rawCookies)
+                .header("Origin", "https://www.instagram.com")
+                .header("Referer", "https://www.instagram.com/direct/t/")
+                .build()
+
+            val sendResp = client.newCall(sendReq).execute()
+            val respBody = sendResp.body?.string() ?: ""
+
+            if (!sendResp.isSuccessful) {
+                val errorMsg = try {
+                    val errJson = JSONObject(respBody)
+                    errJson.optString("message", "کد خطا ${sendResp.code}")
+                } catch (_: Exception) {
+                    "پاسخ سرور اینستاگرام (${sendResp.code})"
+                }
+                return@withContext Result.failure(
+                    IllegalStateException("ارسال به @$cleanTarget از طریق اکانت @$senderUser ناموفق بود: $errorMsg")
+                )
+            }
+
+            val jsonResult = JSONObject(respBody)
+            val status = jsonResult.optString("status", "")
+            if (status == "ok") {
+                val payload = jsonResult.optJSONObject("payload")
+                val itemId = payload?.optString("item_id", "") ?: ""
+                Result.success("پیام واقعی با موفقیت به دایرکت @$cleanTarget ارسال شد (شناسه: ${if (itemId.isNotEmpty()) itemId else "موفق"}).")
+            } else {
+                val msg = jsonResult.optString("message", "اینستاگرام پیام را ارسال نکرد.")
+                Result.failure(IllegalStateException("خطای اینستاگرام: $msg"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun extractCookieValue(cookieHeader: String, key: String): String {
+        return cookieHeader.split(";")
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("$key=") }
+            ?.removePrefix("$key=")
+            ?: ""
     }
 }

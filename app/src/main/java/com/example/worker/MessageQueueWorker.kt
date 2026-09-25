@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import com.example.R
 import com.example.data.local.AppDatabase
 import com.example.data.local.SettingsDataStore
+import com.example.data.repository.InstagramRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 
@@ -20,6 +21,7 @@ class MessageQueueWorker(
 
     private val db = AppDatabase.getDatabase(context)
     private val settingsDataStore = SettingsDataStore(context)
+    private val repository = InstagramRepository(context)
     private val channelId = "insta_messaging_channel"
     private val notificationId = 1002
 
@@ -30,7 +32,7 @@ class MessageQueueWorker(
         createNotificationChannel()
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val delaySeconds = settingsDataStore.rateLimitDelay.first()
+        val delaySeconds = settingsDataStore.rateLimitDelay.first().coerceAtLeast(5)
 
         val pendingItems = db.messageQueueDao().getQueueByCampaignSync(campaignId)
             .filter { it.status == "PENDING" || it.status == "RETRY" }
@@ -40,7 +42,7 @@ class MessageQueueWorker(
         var failedCount = 0
 
         for ((index, item) in pendingItems.withIndex()) {
-            val progressText = "${index + 1} / $total (ارسال شده: $sentCount | خطا: $failedCount)"
+            val progressText = "${index + 1} / $total (ارسال: $sentCount | خطا: $failedCount)"
 
             val notification = NotificationCompat.Builder(context, channelId)
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -52,29 +54,57 @@ class MessageQueueWorker(
 
             notificationManager.notify(notificationId, notification)
 
-            // Process message item with rate limit check
             db.messageQueueDao().updateQueueItem(
                 item.copy(status = "PROCESSING", lastAttemptAt = System.currentTimeMillis())
             )
 
-            // Simulate controlled Meta Graph API response rate check
             try {
-                // Throttle delay to respect Instagram rate limits
-                delay(delaySeconds * 1000L)
+                // Rate limit delay
+                if (index > 0) {
+                    delay(delaySeconds * 1000L)
+                }
 
-                // Update queue item to SENT
-                db.messageQueueDao().updateQueueItem(
-                    item.copy(
-                        status = "SENT",
-                        sentAt = System.currentTimeMillis()
+                val targetUser = db.userDao().getUserById(item.userId)
+                val assignedAccount = if (item.accountId != null) db.accountDao().getAccountById(item.accountId) else null
+
+                if (targetUser == null || targetUser.username.isBlank()) {
+                    db.messageQueueDao().updateQueueItem(
+                        item.copy(status = "FAILED", errorMessage = "کاربر در دیتابیس یافت نشد")
                     )
+                    failedCount++
+                    continue
+                }
+
+                val sendResult = repository.sendDirectMessage(
+                    targetUsername = targetUser.username,
+                    messageText = item.messageText,
+                    account = assignedAccount
                 )
-                sentCount++
+
+                if (sendResult.isSuccess) {
+                    db.messageQueueDao().updateQueueItem(
+                        item.copy(
+                            status = "SENT",
+                            sentAt = System.currentTimeMillis(),
+                            errorMessage = null
+                        )
+                    )
+                    sentCount++
+                } else {
+                    val err = sendResult.exceptionOrNull()?.message ?: "خطای ارسال به اینستاگرام"
+                    db.messageQueueDao().updateQueueItem(
+                        item.copy(
+                            status = "FAILED",
+                            errorMessage = err
+                        )
+                    )
+                    failedCount++
+                }
             } catch (e: Exception) {
                 db.messageQueueDao().updateQueueItem(
                     item.copy(
                         status = "FAILED",
-                        errorMessage = e.message ?: "خطا در ارسال پیام"
+                        errorMessage = e.message ?: "خطا در پردازش پیام"
                     )
                 )
                 failedCount++

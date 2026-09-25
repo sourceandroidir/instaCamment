@@ -79,24 +79,40 @@ class CampaignsViewModel(application: Application) : AndroidViewModel(applicatio
     fun runTestSend() {
         val testUser = _createState.value.testUsername.trim()
         if (testUser.isEmpty()) {
-            _createState.update { it.copy(testResult = "لطفاً یک نام کاربری تست وارد کنید.") }
+            _createState.update { it.copy(testResult = "لطفاً یک نام کاربری تست (@username) وارد کنید.") }
             return
         }
 
         _createState.update { it.copy(isTestRunning = true, testResult = null) }
 
         viewModelScope.launch {
-            kotlinx.coroutines.delay(1500)
             val sampleMsg = _createState.value.messageText
                 .replace("{username}", testUser)
                 .replace("{display_name}", testUser)
 
-            _createState.update {
-                it.copy(
-                    isTestRunning = false,
-                    testResult = "ارسال آزمایشی موفقیت‌آمیز بود!\nمتن ارسال شده:\n$sampleMsg"
-                )
-            }
+            val result = repository.sendDirectMessage(
+                targetUsername = testUser,
+                messageText = sampleMsg
+            )
+
+            result.fold(
+                onSuccess = { msg ->
+                    _createState.update {
+                        it.copy(
+                            isTestRunning = false,
+                            testResult = msg
+                        )
+                    }
+                },
+                onFailure = { ex ->
+                    _createState.update {
+                        it.copy(
+                            isTestRunning = false,
+                            testResult = "خطا در ارسال: ${ex.message ?: "خطای ناشناخته"}"
+                        )
+                    }
+                }
+            )
         }
     }
 

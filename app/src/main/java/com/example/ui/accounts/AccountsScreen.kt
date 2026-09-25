@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,18 +54,23 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Language,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "نشست مرورگر و کوکی‌های اینستاگرام",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -75,7 +81,9 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
                             color = Color(0xFF10B981),
                             modifier = Modifier
                                 .background(Color(0xFF10B981).copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -86,48 +94,58 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
                     Text(
                         text = "حساب متصل: @$sessionUser",
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "CSRF Token: ${if (sessionCsrfToken.isNotEmpty()) sessionCsrfToken.take(12) + "..." else "ثبت شده"}",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
+                        maxLines = 1,
+                        softWrap = false
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         Button(
                             onClick = { showBrowserLoginDialog = true },
-                            modifier = Modifier.weight(1f).testTag("relogin_browser_button")
+                            modifier = Modifier.weight(1f).testTag("relogin_browser_button"),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("ورود مجدد")
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ورود مجدد", fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                         OutlinedButton(
                             onClick = { viewModel.clearBrowserSession() },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                            modifier = Modifier.weight(1f).testTag("clear_session_button")
+                            modifier = Modifier.weight(1f).testTag("clear_session_button"),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                         ) {
-                            Icon(Icons.Default.Logout, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("خروج از نشست")
+                            Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("خروج", fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                     }
                 } else {
                     Text(
-                        text = "برای استخراج کامل کامنت‌ها بدون وب‌سرویس رسمی، وارد مرورگر اینستاگرام شوید تا کوکی‌ها و csrftoken به صورت خودکار دریافت و رمزنگاری شوند.",
+                        text = "برای ارسال دایرکت واقعی و استخراج کامل، از مرورگر داخلی وارد شوید تا کوکی‌های نشست امن ذخیره گردند.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.9f)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
                         onClick = { showBrowserLoginDialog = true },
-                        modifier = Modifier.fillMaxWidth().testTag("open_browser_login_button")
+                        modifier = Modifier.fillMaxWidth().testTag("open_browser_login_button"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Icon(Icons.Default.Login, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("ورود به اینستاگرام از طریق مرورگر داخلی")
+                        Icon(Icons.Default.Login, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("ورود با مرورگر اینستاگرام", fontSize = 13.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
@@ -140,16 +158,19 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
         ) {
             Text(
                 text = "حساب‌های ذخیره‌شده (${accounts.size})",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false
             )
 
             OutlinedButton(
                 onClick = { showAddDialog = true },
-                modifier = Modifier.testTag("add_account_button")
+                modifier = Modifier.testTag("add_account_button"),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("افزودن دستی")
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("افزودن دستی", fontSize = 12.sp, maxLines = 1, softWrap = false)
             }
         }
 
@@ -200,13 +221,17 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
                                 Column {
                                     Text(
                                         text = "@${account.username}",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     if (account.csrfToken.isNotEmpty()) {
                                         Text(
                                             text = "دارای CSRF Token",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = Color(0xFF10B981)
+                                            color = Color(0xFF10B981),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
@@ -245,9 +270,14 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
         if (showAddDialog) {
             AlertDialog(
                 onDismissRequest = { showAddDialog = false },
-                title = { Text("افزودن دستی حساب یا کوکی") },
+                title = { Text("افزودن دستی کوکی نشست") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "اگر در کروم کامپیوتر لاگین هستید، می‌توانید مقدار sessionid و csrftoken را مستقیماً در زیر وارد کنید:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         OutlinedTextField(
                             value = addState.username,
                             onValueChange = { viewModel.onUsernameChanged(it) },
@@ -258,22 +288,22 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
                         OutlinedTextField(
                             value = addState.displayName,
                             onValueChange = { viewModel.onDisplayNameChanged(it) },
-                            label = { Text("نام عمومی / عنوان") },
+                            label = { Text("عنوان / برچسب حساب") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("add_account_display_name_input")
                         )
                         OutlinedTextField(
                             value = addState.csrfToken,
                             onValueChange = { viewModel.onCsrfTokenChanged(it) },
-                            label = { Text("CSRF Token (اختیاری)") },
+                            label = { Text("CSRF Token (csrftoken)") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("add_account_csrf_input")
                         )
                         OutlinedTextField(
                             value = addState.cookies,
                             onValueChange = { viewModel.onCookiesChanged(it) },
-                            label = { Text("رشته Cookie کامل (اختیاری)") },
-                            placeholder = { Text("sessionid=...; csrftoken=...") },
+                            label = { Text("کوکی sessionid یا رشته کامل") },
+                            placeholder = { Text("sessionid=...; ds_user_id=...") },
                             maxLines = 3,
                             modifier = Modifier.fillMaxWidth().testTag("add_account_cookies_input")
                         )
@@ -292,14 +322,18 @@ fun AccountsScreen(viewModel: AccountsViewModel) {
                             viewModel.addAccount()
                             showAddDialog = false
                         },
-                        modifier = Modifier.testTag("confirm_add_account_btn")
+                        modifier = Modifier.testTag("confirm_add_account_btn"),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Text("ثبت و ذخیره")
+                        Text("ثبت و اتصال", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showAddDialog = false }) {
-                        Text("انصراف")
+                    TextButton(
+                        onClick = { showAddDialog = false },
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("انصراف", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 }
             )

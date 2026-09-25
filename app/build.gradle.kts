@@ -98,6 +98,7 @@ dependencies {
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
+  implementation("androidx.webkit:webkit:1.11.0")
   implementation("androidx.work:work-runtime-ktx:2.9.1")
   implementation("androidx.security:security-crypto:1.1.0-alpha06")
   implementation(libs.converter.moshi)

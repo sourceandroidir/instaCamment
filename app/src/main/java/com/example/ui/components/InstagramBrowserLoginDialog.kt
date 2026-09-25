@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
@@ -128,7 +130,6 @@ fun InstagramBrowserLoginDialog(
                 for (var el of dList) {
                     var text = (el.innerText || el.textContent || '').toLowerCase();
                     if (text.includes('cookie') || text.includes('کوکی')) {
-                        // Remove backdrop overlay if present
                         var backdrops = document.querySelectorAll('div[style*="position: fixed"], div[class*="x1bwybvy"], div[class*="_a9-z"]');
                         for (var bd of backdrops) {
                             if (bd !== el && bd.contains(el)) {
@@ -177,6 +178,17 @@ fun InstagramBrowserLoginDialog(
         }
     }
 
+    fun resetCookiesAndReload() {
+        try {
+            val cm = CookieManager.getInstance()
+            cm.removeAllCookies(null)
+            cm.flush()
+            webViewRef?.clearCache(true)
+            webViewRef?.loadUrl("https://www.instagram.com/accounts/login/")
+            cookieActionMessage = "کش پاکسازی شد. مجدداً اطلاعات را وارد کنید."
+        } catch (_: Exception) {}
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -200,12 +212,16 @@ fun InstagramBrowserLoginDialog(
                                 Column {
                                     Text(
                                         text = "مرورگر کروم (ورود به اینستاگرام)",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                     Text(
-                                        text = if (loginCaptured) "ورود موفقیت‌آمیز بود! در حال ذخیره کوکی‌ها..." else "در انتظار ورود و دریافت نشست...",
+                                        text = if (loginCaptured) "ورود موفق! در حال ذخیره..." else "در انتظار ورود به حساب...",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = if (loginCaptured) Color(0xFF10B981) else MaterialTheme.colorScheme.outline
+                                        color = if (loginCaptured) Color(0xFF10B981) else MaterialTheme.colorScheme.outline,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -221,6 +237,12 @@ fun InstagramBrowserLoginDialog(
                                 modifier = Modifier.testTag("refresh_browser_page")
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = "تازه سازی")
+                            }
+                            IconButton(
+                                onClick = { resetCookiesAndReload() },
+                                modifier = Modifier.testTag("reset_browser_cookies")
+                            ) {
+                                Icon(Icons.Default.CleaningServices, contentDescription = "پاکسازی نشست")
                             }
                             IconButton(
                                 onClick = {
@@ -258,7 +280,9 @@ fun InstagramBrowserLoginDialog(
                             Text(
                                 text = currentUrl.take(45) + if (currentUrl.length > 45) "..." else "",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -272,14 +296,16 @@ fun InstagramBrowserLoginDialog(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         if (cookieActionMessage != null) {
                             Text(
                                 text = cookieActionMessage!!,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(bottom = 6.dp)
+                                modifier = Modifier.padding(bottom = 6.dp),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
@@ -294,63 +320,60 @@ fun InstagramBrowserLoginDialog(
                                 Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF10B981))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "کوکی‌ها و csrftoken با موفقیت دریافت و ذخیره شدند.",
+                                    text = "کوکی‌ها با موفقیت ذخیره شدند.",
                                     style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                    color = Color(0xFF10B981)
+                                    color = Color(0xFF10B981),
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         } else {
+                            // Row 1: Direct Cookie Solver + Continue Button (Single Line)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // 1. Direct Cookie Consent Solver & Modal Remover
                                 Button(
                                     onClick = { triggerAutoCookieAccept() },
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                                    modifier = Modifier
-                                        .weight(1.2f)
-                                        .testTag("auto_accept_cookie_btn")
+                                    modifier = Modifier.weight(1f).testTag("auto_accept_cookie_btn"),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
-                                    Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("تأیید و بستن پیام کوکی", fontSize = 12.sp)
+                                    Text("تأیید کوکی", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                 }
 
-                                // 2. Click "Continue" button behind modal
                                 OutlinedButton(
                                     onClick = { triggerContinueLogin() },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("click_continue_btn")
+                                    modifier = Modifier.weight(1f).testTag("click_continue_btn"),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("ورود با حساب (Continue)", fontSize = 12.sp)
+                                    Text("ادامه با حساب", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
 
+                            // Row 2: Login Form Jump + Save Cookies (Single Line)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // Direct jump to login form button
                                 OutlinedButton(
                                     onClick = {
                                         webViewRef?.loadUrl("https://www.instagram.com/accounts/login/")
                                     },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .testTag("goto_login_page_btn")
+                                    modifier = Modifier.weight(1f).testTag("goto_login_page_btn"),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
-                                    Icon(Icons.Default.AccountBox, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.AccountBox, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("فرم لاگین دستی", fontSize = 12.sp)
+                                    Text("فرم لاگین", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                 }
 
-                                // Capture Current Cookies
                                 Button(
                                     onClick = {
                                         val cm = CookieManager.getInstance()
@@ -361,17 +384,16 @@ fun InstagramBrowserLoginDialog(
                                             val cleanUser = if (userId.isNotEmpty()) "user_$userId" else "instagram_user"
                                             onLoginSuccess(cookies, csrf, cleanUser)
                                         } else {
-                                            cookieActionMessage = "کوکی‌های نشست هنوز در کروم ثبت نشده‌اند. ابتدا لاگین کنید."
+                                            cookieActionMessage = "کوکی‌های نشست هنوز ثبت نشده‌اند. ابتدا لاگین کنید."
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                                    modifier = Modifier
-                                        .weight(1.2f)
-                                        .testTag("manual_capture_cookies_btn")
+                                    modifier = Modifier.weight(1f).testTag("manual_capture_cookies_btn"),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
                                 ) {
-                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("ذخیره نشست فعلی", fontSize = 12.sp)
+                                    Text("ذخیره نشست", fontSize = 12.sp, maxLines = 1, softWrap = false)
                                 }
                             }
                         }
@@ -413,12 +435,19 @@ fun InstagramBrowserLoginDialog(
                                     "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36"
                             }
 
+                            // Remove X-Requested-With so Instagram does not flag or reject WebView login requests
+                            try {
+                                if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                                    WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
+                                }
+                            } catch (_: Exception) {}
+
                             val cookieManager = CookieManager.getInstance()
                             cookieManager.setAcceptCookie(true)
                             cookieManager.setAcceptThirdPartyCookies(this, true)
                             CookieManager.setAcceptFileSchemeCookies(true)
 
-                            // Pre-inject Instagram cookie consent so it is less likely to show
+                            // Pre-inject consent cookie so Instagram cookie wall is bypassed
                             try {
                                 cookieManager.setCookie("https://www.instagram.com", "ig_cb=1; Path=/; Domain=.instagram.com; Secure; SameSite=None")
                                 cookieManager.setCookie("https://www.instagram.com", "ig_did=1; Path=/; Domain=.instagram.com; Secure; SameSite=None")
@@ -429,6 +458,11 @@ fun InstagramBrowserLoginDialog(
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                     super.onPageStarted(view, url, favicon)
                                     isLoading = true
+                                    // Remove webdriver flag
+                                    view?.evaluateJavascript(
+                                        "try { Object.defineProperty(navigator, 'webdriver', {get: () => undefined}); } catch(e){}",
+                                        null
+                                    )
                                 }
 
                                 override fun onPageFinished(view: WebView?, url: String?) {
@@ -437,7 +471,7 @@ fun InstagramBrowserLoginDialog(
                                     pageTitle = view?.title ?: "اینستاگرام"
                                     currentUrl = url ?: ""
 
-                                    // Run auto cookie consent clicker and modal remover in background
+                                    // Run auto cookie consent clicker and modal remover
                                     view?.evaluateJavascript(
                                         """
                                         setTimeout(function() {

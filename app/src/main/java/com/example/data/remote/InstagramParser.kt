@@ -245,26 +245,46 @@ class InstagramParser {
         if (thumbnailUrl.isBlank()) {
             val displayUrlMatch = Pattern.compile("\"display_url\"\\s*:\\s*\"([^\"]+)\"").matcher(html)
             if (displayUrlMatch.find()) {
-                thumbnailUrl = displayUrlMatch.group(1)?.replace("\\u0026", "&") ?: ""
+                thumbnailUrl = displayUrlMatch.group(1) ?: ""
+            }
+        }
+
+        if (thumbnailUrl.isBlank()) {
+            val thumbSrcMatch = Pattern.compile("\"thumbnail_src\"\\s*:\\s*\"([^\"]+)\"").matcher(html)
+            if (thumbSrcMatch.find()) {
+                thumbnailUrl = thumbSrcMatch.group(1) ?: ""
             }
         }
 
         if (videoUrl.isBlank()) {
             val vMatch = Pattern.compile("\"video_url\"\\s*:\\s*\"([^\"]+)\"").matcher(html)
             if (vMatch.find()) {
-                videoUrl = vMatch.group(1)?.replace("\\u0026", "&") ?: ""
+                videoUrl = vMatch.group(1) ?: ""
                 isVideo = true
             }
         }
 
+        val cleanedThumb = cleanUrl(thumbnailUrl)
+        val cleanedVideo = cleanUrl(videoUrl)
+
         return PostMetadata(
             caption = caption,
-            thumbnailUrl = thumbnailUrl,
-            videoUrl = videoUrl,
-            isVideo = isVideo,
+            thumbnailUrl = cleanedThumb,
+            videoUrl = cleanedVideo,
+            isVideo = isVideo || cleanedVideo.isNotEmpty(),
             authorUsername = authorUsername,
             commentCount = commentCount
         )
+    }
+
+    private fun cleanUrl(raw: String): String {
+        if (raw.isBlank()) return ""
+        return raw
+            .replace("\\u0026", "&")
+            .replace("&amp;", "&")
+            .replace("\\/", "/")
+            .replace("\"", "")
+            .trim()
     }
 
     private fun parseInstagramJsonResponse(jsonStr: String, shortcode: String): ExtractionResult {
@@ -294,10 +314,12 @@ class InstagramParser {
 
         if (mediaObj != null) {
             mediaId = mediaObj.optString("id", shortcode)
-            thumbnailUrl = mediaObj.optString("display_url").ifEmpty {
-                mediaObj.optString("thumbnail_src")
-            }
-            videoUrl = mediaObj.optString("video_url")
+            thumbnailUrl = cleanUrl(
+                mediaObj.optString("display_url").ifEmpty {
+                    mediaObj.optString("thumbnail_src")
+                }
+            )
+            videoUrl = cleanUrl(mediaObj.optString("video_url"))
             isVideo = mediaObj.optBoolean("is_video", videoUrl.isNotEmpty())
 
             // Extract caption

@@ -18,6 +18,9 @@ interface UserDao {
     @Query("SELECT * FROM instagram_users WHERE username = :username LIMIT 1")
     suspend fun getUserByUsername(username: String): InstagramUser?
 
+    @Query("SELECT * FROM instagram_users WHERE id = :id LIMIT 1")
+    suspend fun getUserById(id: Long): InstagramUser?
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertUser(user: InstagramUser): Long
 

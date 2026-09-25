@@ -13,9 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.StatusChip
 
@@ -168,8 +170,14 @@ fun CampaignsScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Test Send Section
-                        Text("ارسال آزمایشی:", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                        // Test Send Section (Real Direct Message)
+                        Text(
+                            text = "ارسال آزمایشی واقعی به دایرکت:",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -177,7 +185,7 @@ fun CampaignsScreen(
                             OutlinedTextField(
                                 value = createState.testUsername,
                                 onValueChange = { viewModel.onTestUsernameChanged(it) },
-                                label = { Text("نام کاربری تست") },
+                                label = { Text("نام کاربری (@username)") },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f).testTag("test_username_input")
                             )
@@ -185,30 +193,46 @@ fun CampaignsScreen(
                             Button(
                                 onClick = { viewModel.runTestSend() },
                                 enabled = !createState.isTestRunning,
-                                modifier = Modifier.testTag("run_test_send_btn")
+                                modifier = Modifier.testTag("run_test_send_btn"),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
                             ) {
-                                Text("تست")
+                                if (createState.isTestRunning) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary)
+                                } else {
+                                    Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("ارسال تست", fontSize = 12.sp, maxLines = 1, softWrap = false)
+                                }
                             }
                         }
 
                         if (createState.testResult != null) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = createState.testResult!!,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val isError = createState.testResult!!.startsWith("خطا")
+                            Surface(
+                                color = if (isError) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f) else Color(0xFF10B981).copy(alpha = 0.15f),
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = createState.testResult!!,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF10B981),
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
                         Button(
                             onClick = { viewModel.launchCampaign() },
-                            modifier = Modifier.fillMaxWidth().testTag("launch_campaign_button")
+                            modifier = Modifier.fillMaxWidth().testTag("launch_campaign_button"),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
                         ) {
-                            Icon(Icons.Default.Send, contentDescription = null)
+                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("شروع کمپین و ایجاد صف ارسال")
+                            Text("شروع کمپین", fontSize = 13.sp, maxLines = 1, softWrap = false)
                         }
                     }
                 }
